@@ -1,15 +1,33 @@
 package com.jari.SimpleUsbSerialExample;
 
+import android.content.BroadcastReceiver;
 import android.os.Bundle;
+
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
+import com.hoho.android.usbserial.driver.UsbSerialPort;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+
+import android.os.Handler;
+import android.os.Message;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
+
+    private BroadcastReceiver mUsbReceiver;
+    private ListView lv_detected_device;
+
+    private List<UsbSerialPort> mEntries = new ArrayList<UsbSerialPort>();
+    private ArrayAdapter<UsbSerialPort> mAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -18,7 +36,7 @@ public class MainActivity extends AppCompatActivity {
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-       FloatingActionButton fab = findViewById(R.id.fab);
+        FloatingActionButton fab = findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
