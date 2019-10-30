@@ -1,6 +1,5 @@
 package com.jari.SimpleUsbSerialExample;
 
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -13,21 +12,20 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.os.Bundle;
-
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.snackbar.Snackbar;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.hoho.android.usbserial.driver.UsbSerialProber;
+import com.hoho.android.usbserial.util.HexDump;
+import com.hoho.android.usbserial.util.SerialInputOutputManager;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
 
 import android.os.IBinder;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.method.ScrollingMovementMethod;
 import android.text.style.ForegroundColorSpan;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -36,6 +34,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.util.List;
+import java.util.concurrent.Executors;
 
 /**
  * @author:sunchen
@@ -77,10 +78,14 @@ public class SerialConsoleActivity extends AppCompatActivity implements ServiceC
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_serial_console);
+        //绑定服务
+        bindService(new Intent(SerialConsoleActivity.this, SerialService.class), this, Context.BIND_AUTO_CREATE);
+
         receiveText = findViewById(R.id.receive_text);
         receiveText.setTextColor(getResources().getColor(R.color.colorRecieveText));
         receiveText.setMovementMethod(ScrollingMovementMethod.getInstance());
         TextView sendText = findViewById(R.id.send_text);
+        sendText.setText(getHexMsg());
         View sendBtn = findViewById(R.id.send_btn);
 
         sendBtn.setOnClickListener(v -> send(sendText.getText().toString()));
@@ -94,6 +99,11 @@ public class SerialConsoleActivity extends AppCompatActivity implements ServiceC
         if (connected != Connected.False)
             disconnect();
         stopService(new Intent(SerialConsoleActivity.this, SerialService.class));
+        try {
+            unbindService(this);
+        } catch(Exception ignored) {
+            ignored.printStackTrace();
+        }
         super.onDestroy();
     }
 
@@ -114,19 +124,6 @@ public class SerialConsoleActivity extends AppCompatActivity implements ServiceC
         super.onStop();
     }
 
-    // TODO: 2019/10/29 sc onAttach
-//    @Override
-//    public void onAttach(Activity activity) {
-//        super.onAttach(activity);
-//        bindService(new Intent(SerialConsoleActivity.this, SerialService.class), this, Context.BIND_AUTO_CREATE);
-//    }
-
-    // TODO: 2019/10/29 sc onDetach
-//    @Override
-//    public void onDetach() {
-//        try { getActivity().unbindService(this); } catch(Exception ignored) {}
-//        super.onDetach();
-//    }
 
     @Override
     public void onResume() {
@@ -148,7 +145,6 @@ public class SerialConsoleActivity extends AppCompatActivity implements ServiceC
 
     @Override
     public void onServiceConnected(ComponentName name, IBinder binder) {
-        // TODO: 2019/10/29 sc isResume 在activity中没有对应，用于判断activity是不是在前台
         service = ((SerialService.SerialBinder) binder).getService();
         if(initialStart) {
             initialStart = false;
@@ -264,9 +260,11 @@ public class SerialConsoleActivity extends AppCompatActivity implements ServiceC
         }
         try {
             SpannableStringBuilder spn = new SpannableStringBuilder(str+'\n');
-            spn.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.colorSendText)), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            spn.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.colorSendText)),
+                    0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
             receiveText.append(spn);
-            byte[] data = (str + newline).getBytes();
+            byte[] data = HexUtils.toByteArray(str);
+//            byte[] data = (str + newline).getBytes();
             socket.write(data);
         } catch (Exception e) {
             onSerialIoError(e);
@@ -274,12 +272,16 @@ public class SerialConsoleActivity extends AppCompatActivity implements ServiceC
     }
 
     private void receive(byte[] data) {
-        receiveText.append(new String(data));
+        SpannableStringBuilder spn = new SpannableStringBuilder(HexUtils.toHexString(data) +'\n');
+        spn.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.colorRecieveText)),
+                0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        receiveText.append(spn);
     }
 
     private void status(String str) {
         SpannableStringBuilder spn = new SpannableStringBuilder(str+'\n');
-        spn.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.colorStatusText)), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        spn.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.colorStatusText)),
+                0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
         receiveText.append(spn);
     }
 
@@ -308,4 +310,26 @@ public class SerialConsoleActivity extends AppCompatActivity implements ServiceC
         status("connection lost: " + e.getMessage());
         disconnect();
     }
+
+    private void updateReceivedData(byte[] data) {
+        final String message = "Read " + data.length + " bytes: \n"
+                + HexDump.dumpHexString(data) + "\n\n";
+        Log.e("Example" , message);
+    }
+
+    public String getHexMsg() {
+        String dataStr = "7e";
+        byte start = 0x7e;
+        byte end = 0X7E;
+        System.out.println(start == end);
+        byte[] bytes = HexUtils.toByteArray(dataStr);
+        System.out.println(bytes[0] == start);
+        String framData = "7efffe000110051283035add7e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+
+        return framData;
+    }
+
+
+
+
 }

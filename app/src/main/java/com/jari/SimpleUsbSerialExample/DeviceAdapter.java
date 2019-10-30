@@ -10,6 +10,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * @author:sunchen
@@ -57,7 +58,8 @@ public class DeviceAdapter extends BaseAdapter {
             viewHolder= (ViewHolder) view.getTag();
         }
         if (listItem.getDevice() != null) {
-            viewHolder.tvDeviceName.setText(listItem.getDevice().getDeviceName());
+            viewHolder.tvDeviceName.setText(String.format(Locale.US, "Vendor %04X, Product %04X",
+                    listItem.device.getVendorId(), listItem.device.getProductId()));
         } else {
             viewHolder.tvDeviceName.setText("没有设备");
         }

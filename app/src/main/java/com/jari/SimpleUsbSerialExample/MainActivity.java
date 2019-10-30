@@ -65,7 +65,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        btnToSimpleTestActivity.findViewById(R.id.btn_to_SimpleTextActivity);
+        btnToSimpleTestActivity = findViewById(R.id.btn_to_SimpleTextActivity);
         btnToSimpleTestActivity.setOnClickListener(v -> jumpToSimpleTextActivity());
 
         lvDetectedDevice = (ListView)findViewById(R.id.lv_detected_devices);
